@@ -5,13 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>스마트 모임 장소 & 날짜 투표</title>
 
-  <!-- 🔑 카카오 API 스크립트 (본인 JS 키 적용) -->
+  <!-- 🔑 카카오 API 스크립트 -->
   <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a6c2fc47cb08f9a3cc41d343944ebdc0&libraries=services"></script>
 
   <style>
     :root {
       --primary-color: #3182f6;
       --primary-light: #e8f3ff;
+      --kakao-yellow: #fae100;
+      --kakao-brown: #3c1e1e;
       --bg-color: #f2f4f6;
       --card-bg: #ffffff;
       --text-color: #191f28;
@@ -55,7 +57,6 @@
     }
     input[type="text"]:focus, input[type="date"]:focus { border-color: var(--primary-color); }
 
-    /* 지도 영역 높이 강제 및 오버플로우 방지 */
     #mainMap {
       width: 100%;
       height: 250px;
@@ -86,8 +87,7 @@
       display: inline-flex; align-items: center; justify-content: center;
       padding: 6px 10px; font-size: 11px; font-weight: 600; border-radius: 6px; text-decoration: none;
     }
-    .ext-btn-naver { background-color: #e7f9f0; color: #00b04a; border: 1px solid #bdf2d5; }
-    .ext-btn-kakao { background-color: #fef9d7; color: #3c1e1e; border: 1px solid #fae100; }
+    .ext-btn-kakao { background-color: var(--kakao-yellow); color: var(--kakao-brown); border: 1px solid #e0c800; }
 
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -159,7 +159,7 @@
 
     <!-- 장소 검색 영역 -->
     <div class="form-group">
-      <label style="font-size: 13px; font-weight: 600;">근처 매장 검색 (거리순 정렬)</label>
+      <label style="font-size: 13px; font-weight: 600;">근처 매장 검색 (정확도 보정 적용)</label>
       <div class="search-box">
         <input type="text" id="candidateInput" placeholder="검색어 입력 (예: 현대백화점, 스타벅스)" onkeyup="handleKeyup(event)">
         <div id="suggestions" class="suggestions"></div>
@@ -205,7 +205,7 @@
   let currentBaseName = "판교역";
   let selectedPlaceData = null;
 
-  let candidates = JSON.parse(localStorage.getItem('poll_candidates_kakao_v5')) || [];
+  let candidates = JSON.parse(localStorage.getItem('poll_candidates_kakao_v6')) || [];
   let typingTimer;
   
   let mainMapObj = null;
@@ -231,7 +231,6 @@
       map: mainMapObj
     });
 
-    // 💡 회색 화면 방지: 지도가 로드된 후 재계산 및 중심점 강제 지정
     setTimeout(function() {
       if (mainMapObj) {
         mainMapObj.relayout();
@@ -256,7 +255,7 @@
       function(pos) {
         userLat = pos.coords.latitude;
         userLng = pos.coords.longitude;
-        currentBaseName = "내 현재 위치";
+        currentBaseName = "내 위치";
         statusText.innerText = "📍 기준 위치: 내 현재 위치";
         msgText.innerHTML = "<span class='status-badge success'>✅ GPS 연결 성공!</span> 내 위치로 기준 설정됨";
 
@@ -318,21 +317,32 @@
       document.getElementById('suggestions').style.display = 'none';
       return;
     }
-    typingTimer = setTimeout(function() { searchKakaoPlaces(query); }, 200);
+    typingTimer = setTimeout(function() { searchKakaoPlaces(query); }, 250);
   }
 
+  // 💡 [검색 유연성/정확도 개선] 기준 위치명을 조합하여 카카오 검색 품질 향상
   function searchKakaoPlaces(query) {
+    // 사용자가 명시적으로 지역을 입력하지 않았다면 기준 위치명을 붙임
+    const isBaseIncluded = currentBaseName === "내 위치" || query.includes(currentBaseName);
+    const searchQuery = isBaseIncluded ? query : (currentBaseName + " " + query);
+
     const searchOptions = {
       location: new kakao.maps.LatLng(userLat, userLng),
-      radius: 20000,
-      sort: kakao.maps.services.SortBy.DISTANCE
+      radius: 15000 // 15km 범위 내 우선 탐색
     };
 
-    ps.keywordSearch(query, function(data, status) {
+    ps.keywordSearch(searchQuery, function(data, status) {
       if (status === kakao.maps.services.Status.OK) {
         renderSuggestions(data);
       } else {
-        document.getElementById('suggestions').style.display = 'none';
+        // 조합 검색 결과가 없으면 원래 단어로 재검색 (안전장치)
+        ps.keywordSearch(query, function(fallbackData, fallbackStatus) {
+          if (fallbackStatus === kakao.maps.services.Status.OK) {
+            renderSuggestions(fallbackData);
+          } else {
+            document.getElementById('suggestions').style.display = 'none';
+          }
+        }, searchOptions);
       }
     }, searchOptions);
   }
@@ -343,20 +353,18 @@
 
     places.forEach(function(item) {
       const distanceMeter = parseInt(item.distance);
-      const distStr = distanceMeter < 1000 ? distanceMeter + "m" : (distanceMeter / 1000).toFixed(1) + "km";
-      const encName = encodeURIComponent(item.place_name);
+      const distStr = isNaN(distanceMeter) ? '' : (distanceMeter < 1000 ? distanceMeter + "m" : (distanceMeter / 1000).toFixed(1) + "km");
 
       const div = document.createElement('div');
       div.className = 'suggestion-item';
       div.innerHTML = 
         '<div class="suggestion-header">' +
           '<span class="place-name">📍 ' + item.place_name + '</span>' +
-          '<span class="place-distance">' + distStr + '</span>' +
+          (distStr ? '<span class="place-distance">' + distStr + '</span>' : '') +
         '</div>' +
         '<div class="place-addr">' + (item.road_address_name || item.address_name) + '</div>' +
         '<div class="external-map-btns" onclick="event.stopPropagation()">' +
-          '<a class="ext-btn ext-btn-naver" href="https://map.naver.com/v5/search/' + encName + '" target="_blank">🟢 네이버 지도</a>' +
-          '<a class="ext-btn ext-btn-kakao" href="' + item.place_url + '" target="_blank">🟡 카카오 맵</a>' +
+          '<a class="ext-btn ext-btn-kakao" href="' + item.place_url + '" target="_blank">🟡 카카오맵 상세</a>' +
         '</div>';
 
       div.onclick = function() {
@@ -429,7 +437,7 @@
     if (candidate.placeInfo) {
       const info = candidate.placeInfo;
       detailContent += 
-        '<div><b>📏 기준 위치 거리:</b> ' + (info.distStr || '정보 없음') + '</div>' +
+        (info.distStr ? '<div><b>📏 기준 위치 거리:</b> ' + info.distStr + '</div>' : '') +
         '<div><b>📍 주소:</b> ' + info.address + '</div>';
 
       setTimeout(function() {
@@ -452,11 +460,12 @@
       document.getElementById('popupMap').style.display = 'none';
     }
 
+    const kakaoLink = (candidate.placeInfo && candidate.placeInfo.placeUrl) ? candidate.placeInfo.placeUrl : ('https://map.kakao.com/link/search/' + encTitle);
+
     detailContent += 
       '<div style="margin-top: 8px;"><b>🧭 외부 지도로 확인:</b></div>' +
       '<div class="external-map-btns" style="margin-top: 6px;">' +
-        '<a class="ext-btn ext-btn-naver" href="https://map.naver.com/v5/search/' + encTitle + '" target="_blank">🟢 네이버 지도</a>' +
-        '<a class="ext-btn ext-btn-kakao" href="' + (candidate.placeInfo && candidate.placeInfo.placeUrl ? candidate.placeInfo.placeUrl : 'https://map.kakao.com/link/search/' + encTitle) + '" target="_blank">🟡 카카오 맵</a>' +
+        '<a class="ext-btn ext-btn-kakao" href="' + kakaoLink + '" target="_blank">🟡 카카오맵 바로가기</a>' +
       '</div>';
 
     document.getElementById('modalPlaceDetail').innerHTML = detailContent;
@@ -501,7 +510,7 @@
   }
 
   function saveData() {
-    localStorage.setItem('poll_candidates_kakao_v5', JSON.stringify(candidates));
+    localStorage.setItem('poll_candidates_kakao_v6', JSON.stringify(candidates));
   }
 
   function render() {
@@ -539,8 +548,7 @@
           '</div>' +
         '</div>' +
         '<div class="external-map-btns">' +
-          '<a class="ext-btn ext-btn-naver" href="https://map.naver.com/v5/search/' + encTitle + '" target="_blank">🟢 네이버 지도</a>' +
-          '<a class="ext-btn ext-btn-kakao" href="' + kakaoUrl + '" target="_blank">🟡 카카오 맵</a>' +
+          '<a class="ext-btn ext-btn-kakao" href="' + kakaoUrl + '" target="_blank">🟡 카카오맵 상세페이지</a>' +
         '</div>' +
         '<div class="voters-list">' + (item.voters.length > 0 ? '참여: ' + item.voters.join(', ') : '아직 투표 없음') + '</div>';
 
@@ -548,7 +556,6 @@
     });
   }
 
-  // 브라우저 렌더링 완료 후 지도 초기화
   window.addEventListener('load', function() {
     if (typeof kakao !== 'undefined' && kakao.maps) {
       initKakaoMaps();
@@ -556,7 +563,6 @@
     }
   });
 
-  // 화면 크기 변경 시 자동 재배치
   window.addEventListener('resize', function() {
     if (mainMapObj) {
       mainMapObj.relayout();
