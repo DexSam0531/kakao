@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>스마트 모임 장소 & 날짜 투표</title>
 
-  <!-- 🔑 카카오 JavaScript 키가 적용된 API 호출 스크립트 -->
-  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a6c2fc47cb08f9a3cc41d343944ebdc0&libraries=services&autoload=success"></script>
+  <!-- 🔑 카카오 API 스크립트 (본인 JS 키 적용) -->
+  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a6c2fc47cb08f9a3cc41d343944ebdc0&libraries=services"></script>
 
   <style>
     :root {
@@ -55,15 +55,15 @@
     }
     input[type="text"]:focus, input[type="date"]:focus { border-color: var(--primary-color); }
 
-    /* 지도 표시 영역 명시적 높이 지정 */
+    /* 지도 영역 높이 강제 및 오버플로우 방지 */
     #mainMap {
       width: 100%;
       height: 250px;
-      min-height: 250px;
       border-radius: 12px;
       margin-bottom: 12px;
       border: 1px solid var(--border-color);
-      background-color: #eee;
+      position: relative;
+      overflow: hidden;
     }
 
     .suggestions {
@@ -216,8 +216,10 @@
 
   function initKakaoMaps() {
     const mainContainer = document.getElementById('mainMap');
+    const centerLatLng = new kakao.maps.LatLng(userLat, userLng);
+    
     const mainOption = {
-      center: new kakao.maps.LatLng(userLat, userLng),
+      center: centerLatLng,
       level: 4
     };
 
@@ -225,13 +227,17 @@
     ps = new kakao.maps.services.Places();
 
     mainMarker = new kakao.maps.Marker({
-      position: new kakao.maps.LatLng(userLat, userLng),
+      position: centerLatLng,
       map: mainMapObj
     });
 
+    // 💡 회색 화면 방지: 지도가 로드된 후 재계산 및 중심점 강제 지정
     setTimeout(function() {
-      if (mainMapObj) mainMapObj.relayout();
-    }, 300);
+      if (mainMapObj) {
+        mainMapObj.relayout();
+        mainMapObj.setCenter(centerLatLng);
+      }
+    }, 500);
   }
 
   function tryGetGPSLocation() {
@@ -438,7 +444,8 @@
           popupMarker.setPosition(popLatLng);
         }
         popupMapObj.relayout();
-      }, 100);
+        popupMapObj.setCenter(popLatLng);
+      }, 150);
 
       document.getElementById('popupMap').style.display = 'block';
     } else {
@@ -541,15 +548,21 @@
     });
   }
 
-  // SDK 로드 후 지도를 여유 있게 초기화하는 부분
-  window.onload = function() {
+  // 브라우저 렌더링 완료 후 지도 초기화
+  window.addEventListener('load', function() {
     if (typeof kakao !== 'undefined' && kakao.maps) {
-      kakao.maps.load(function() {
-        initKakaoMaps();
-        render();
-      });
+      initKakaoMaps();
+      render();
     }
-  };
+  });
+
+  // 화면 크기 변경 시 자동 재배치
+  window.addEventListener('resize', function() {
+    if (mainMapObj) {
+      mainMapObj.relayout();
+      mainMapObj.setCenter(new kakao.maps.LatLng(userLat, userLng));
+    }
+  });
 </script>
 </body>
 </html>
