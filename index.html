@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>스마트 모임 장소 & 날짜 투표</title>
 
-  <!-- 🔑 카카오 JavaScript 키가 정상 적용되어 있습니다 -->
-  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a6c2fc47cb08f9a3cc41d343944ebdc0&libraries=services"></script>
+  <!-- 🔑 카카오 JavaScript 키가 적용된 API 호출 스크립트 -->
+  <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a6c2fc47cb08f9a3cc41d343944ebdc0&libraries=services&autoload=false"></script>
 
   <style>
     :root {
@@ -55,8 +55,15 @@
     }
     input[type="text"]:focus, input[type="date"]:focus { border-color: var(--primary-color); }
 
+    /* 지도 표시 영역 명시적 높이 지정 */
     #mainMap {
-      width: 100%; height: 250px; border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--border-color);
+      width: 100%;
+      height: 250px;
+      min-height: 250px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border-color);
+      background-color: #eee;
     }
 
     .suggestions {
@@ -198,7 +205,7 @@
   let currentBaseName = "판교역";
   let selectedPlaceData = null;
 
-  let candidates = JSON.parse(localStorage.getItem('poll_candidates_kakao_v4')) || [];
+  let candidates = JSON.parse(localStorage.getItem('poll_candidates_kakao_v5')) || [];
   let typingTimer;
   
   let mainMapObj = null;
@@ -221,6 +228,10 @@
       position: new kakao.maps.LatLng(userLat, userLng),
       map: mainMapObj
     });
+
+    setTimeout(function() {
+      if (mainMapObj) mainMapObj.relayout();
+    }, 300);
   }
 
   function tryGetGPSLocation() {
@@ -483,7 +494,7 @@
   }
 
   function saveData() {
-    localStorage.setItem('poll_candidates_kakao_v4', JSON.stringify(candidates));
+    localStorage.setItem('poll_candidates_kakao_v5', JSON.stringify(candidates));
   }
 
   function render() {
@@ -530,14 +541,15 @@
     });
   }
 
- window.onload = function() {
-  if (typeof kakao !== 'undefined' && kakao.maps) {
-    kakao.maps.load(function() {
-      initKakaoMaps();
-      render();
-    });
-  }
-};
+  // SDK 로드 후 지도를 여유 있게 초기화하는 부분
+  window.onload = function() {
+    if (typeof kakao !== 'undefined' && kakao.maps) {
+      kakao.maps.load(function() {
+        initKakaoMaps();
+        render();
+      });
+    }
+  };
 </script>
 </body>
 </html>
