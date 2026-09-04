@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>스마트 모임 장소 & 날짜 투표</title>
 
-  <!-- 🔑 카카오 API 스크립트 -->
   <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a6c2fc47cb08f9a3cc41d343944ebdc0&libraries=services"></script>
 
   <style>
@@ -21,6 +20,8 @@
       --border-color: #e5e8eb;
       --success-color: #00b04a;
       --danger-color: #f04452;
+      --ai-purple: #7000ff;
+      --ai-purple-light: #f3ebff;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
@@ -51,21 +52,34 @@
     .search-box { position: relative; margin-bottom: 12px; }
     .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 
-    input[type="text"], input[type="date"] {
+    input[type="text"], input[type="date"], select {
       width: 100%; padding: 12px 14px; border: 1px solid var(--border-color);
       border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s;
     }
-    input[type="text"]:focus, input[type="date"]:focus { border-color: var(--primary-color); }
+    input[type="text"]:focus, input[type="date"]:focus, select:focus { border-color: var(--primary-color); }
 
     #mainMap {
-      width: 100%;
-      height: 250px;
-      border-radius: 12px;
-      margin-bottom: 12px;
-      border: 1px solid var(--border-color);
-      position: relative;
-      overflow: hidden;
+      width: 100%; height: 250px; border-radius: 12px; margin-bottom: 12px;
+      border: 1px solid var(--border-color); position: relative; overflow: hidden;
     }
+
+    /* 🏷️ 추천 태그 & 버튼 스타일 */
+    .recommend-section { margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .tag-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tag-btn {
+      background: #f2f4f6; border: 1px solid var(--border-color); color: var(--text-color);
+      padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .tag-btn:hover { background: var(--primary-light); color: var(--primary-color); border-color: var(--primary-color); }
+
+    /* 🤖 AI 추천 박스 스타일 */
+    .ai-box {
+      background: var(--ai-purple-light); border: 1px solid #d8b4fe; border-radius: 12px; padding: 12px; margin-bottom: 12px;
+    }
+    .ai-title { font-weight: 700; font-size: 13px; color: var(--ai-purple); margin-bottom: 8px; display: flex; align-items: center; gap: 4px; }
+    .ai-row { display: flex; gap: 6px; }
+    .ai-btn { background: var(--ai-purple); color: white; border: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; white-space: nowrap; }
+    .ai-result { margin-top: 8px; font-size: 12px; color: #4c1d95; line-height: 1.4; display: none; }
 
     .suggestions {
       position: absolute; top: 100%; left: 0; right: 0; background: white;
@@ -97,12 +111,8 @@
       background: white; border-radius: 18px; padding: 20px; width: 90%; max-width: 400px; text-align: left;
     }
 
-    #popupMap {
-      width: 100%; height: 200px; border-radius: 12px; margin: 12px 0; border: 1px solid var(--border-color);
-    }
-    .place-detail-card {
-      background: #f8f9fa; border-radius: 10px; padding: 12px; font-size: 13px; display: flex; flex-direction: column; gap: 8px;
-    }
+    #popupMap { width: 100%; height: 200px; border-radius: 12px; margin: 12px 0; border: 1px solid var(--border-color); }
+    .place-detail-card { background: #f8f9fa; border-radius: 10px; padding: 12px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
 
     button {
       padding: 10px 14px; background-color: var(--primary-color); color: white;
@@ -154,19 +164,60 @@
       </div>
     </div>
 
-    <!-- 카카오 메인 지도 -->
     <div id="mainMap"></div>
 
-    <!-- 장소 검색 영역 -->
+    <div class="ai-box">
+      <div class="ai-title">✨ AI 스마트 모임 추천기</div>
+      <div class="ai-row">
+        <select id="aiTypeSelect" style="font-size: 12px; padding: 6px 8px;">
+          <option value="회식">단체 회식하기 좋은 곳</option>
+          <option value="대화">조용히 대화 나누기 좋은 카페</option>
+          <option value="놀거리">친구들과 즐길 액티비티/놀거리</option>
+          <option value="분위기">분위기 좋은 데이트/파인다이닝</option>
+        </select>
+        <button class="ai-btn" onclick="runAiRecommendation()">AI 분석 추천</button>
+      </div>
+      <div id="aiResultBox" class="ai-result"></div>
+    </div>
+
+    <div class="recommend-section">
+      <div>
+        <label style="font-size: 12px; font-weight: 600; color: var(--sub-text);">📌 빠른 카테고리 추천</label>
+        <div class="tag-group" style="margin-top: 4px;">
+          <button class="tag-btn" onclick="quickSearch('카페')">☕ 카페</button>
+          <button class="tag-btn" onclick="quickSearch('맛집')">🍽️ 맛집</button>
+          <button class="tag-btn" onclick="quickSearch('술집')">🍺 술집/호프</button>
+          <button class="tag-btn" onclick="quickSearch('스터디카페')">📖 스터디룸</button>
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size: 12px; font-weight: 600; color: var(--sub-text);">💡 상황별 테마 추천</label>
+        <div class="tag-group" style="margin-top: 4px;">
+          <button class="tag-btn" onclick="quickSearch('주차장 넓은 맛집')">🚗 주차 용이</button>
+          <button class="tag-btn" onclick="quickSearch('룸식당')">🚪 프라이빗 룸</button>
+          <button class="tag-btn" onclick="quickSearch('보드게임카페')">🎲 놀거리/게임</button>
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size: 12px; font-weight: 600; color: var(--sub-text);">🔥 인기 핫플 바로검색</label>
+        <div class="tag-group" style="margin-top: 4px;">
+          <button class="tag-btn" style="background:#fff0f0; color:#d93838; border-color:#ffcdd2;" onclick="quickSearch('현대백화점')">🏢 백화점/쇼핑몰</button>
+          <button class="tag-btn" style="background:#fff0f0; color:#d93838; border-color:#ffcdd2;" onclick="quickSearch('CGV')">🎬 영화관</button>
+          <button class="tag-btn" style="background:#fff0f0; color:#d93838; border-color:#ffcdd2;" onclick="quickSearch('스타벅스')">⭐ 대표 만남장소</button>
+        </div>
+      </div>
+    </div>
+
     <div class="form-group">
-      <label style="font-size: 13px; font-weight: 600;">근처 매장 검색 (정확도 보정 적용)</label>
+      <label style="font-size: 13px; font-weight: 600;">장소, 주소 검색</label>
       <div class="search-box">
-        <input type="text" id="candidateInput" placeholder="검색어 입력 (예: 현대백화점, 스타벅스)" onkeyup="handleKeyup(event)">
+        <input type="text" id="candidateInput" placeholder="장소명 또는 주소 입력 (예: 강남역 스타벅스, 판교역로 166)" onkeyup="handleKeyup(event)">
         <div id="suggestions" class="suggestions"></div>
       </div>
     </div>
 
-    <!-- 날짜 입력 및 추가 버튼 -->
     <div class="form-group">
       <label style="font-size: 13px; font-weight: 600;">희망 날짜 선택</label>
       <input type="date" id="meetingDate">
@@ -187,7 +238,6 @@
   </div>
 </div>
 
-<!-- 상세 지도 팝업 -->
 <div class="modal-overlay" id="placeDetailModal">
   <div class="modal-content">
     <h2 id="modalPlaceTitle" style="font-size: 18px; color: var(--text-color);">장소 정보</h2>
@@ -205,7 +255,7 @@
   let currentBaseName = "판교역";
   let selectedPlaceData = null;
 
-  let candidates = JSON.parse(localStorage.getItem('poll_candidates_kakao_v6')) || [];
+  let candidates = JSON.parse(localStorage.getItem('poll_candidates_kakao_v7')) || [];
   let typingTimer;
   
   let mainMapObj = null;
@@ -218,10 +268,7 @@
     const mainContainer = document.getElementById('mainMap');
     const centerLatLng = new kakao.maps.LatLng(userLat, userLng);
     
-    const mainOption = {
-      center: centerLatLng,
-      level: 4
-    };
+    const mainOption = { center: centerLatLng, level: 4 };
 
     mainMapObj = new kakao.maps.Map(mainContainer, mainOption);
     ps = new kakao.maps.services.Places();
@@ -237,6 +284,41 @@
         mainMapObj.setCenter(centerLatLng);
       }
     }, 500);
+  }
+
+  /* 🤖 AI 스마트 추천 처리 함수 */
+  function runAiRecommendation() {
+    const type = document.getElementById('aiTypeSelect').value;
+    const resultBox = document.getElementById('aiResultBox');
+
+    let keyword = "";
+    let reason = "";
+
+    if (type === "회식") {
+      keyword = "삼겹살 고기집";
+      reason = `💡 <b>AI 추천 이유:</b> [${currentBaseName}] 인근 단체 좌석 수용이 용이하고 호불호 없는 메뉴입니다.`;
+    } else if (type === "대화") {
+      keyword = "대형 디저트 카페";
+      reason = `💡 <b>AI 추천 이유:</b> [${currentBaseName}] 인근 좌석 간격이 넓고 조용한 분위기의 카페입니다.`;
+    } else if (type === "놀거리") {
+      keyword = "보드게임카페 볼링장";
+      reason = `💡 <b>AI 추천 이유:</b> [${currentBaseName}] 근처에서 다 함께 즐길 수 있는 체험형 장소입니다.`;
+    } else if (type === "분위기") {
+      keyword = "이탈리안 레스토랑";
+      reason = `💡 <b>AI 추천 이유:</b> [${currentBaseName}] 주변 조명과 분위기가 좋아 모임에 적합합니다.`;
+    }
+
+    resultBox.innerHTML = reason;
+    resultBox.style.display = 'block';
+
+    quickSearch(keyword);
+  }
+
+  /* 🏷️ 태그 버튼 클릭 시 자동 검색 연동 */
+  function quickSearch(keyword) {
+    const input = document.getElementById('candidateInput');
+    input.value = keyword;
+    searchKakaoPlaces(keyword);
   }
 
   function tryGetGPSLocation() {
@@ -273,302 +355,3 @@
   }
 
   function toggleManualBaseInput() {
-    const box = document.getElementById('manualBaseBox');
-    box.style.display = box.style.display === 'flex' ? 'none' : 'flex';
-  }
-
-  function submitCustomBaseLocation() {
-    const inputField = document.getElementById('manualBaseInput');
-    const query = inputField.value.trim();
-    if (!query) {
-      alert('지역명이나 역명을 입력해 주세요.');
-      return;
-    }
-
-    ps.keywordSearch(query, function(data, status) {
-      if (status === kakao.maps.services.Status.OK && data.length > 0) {
-        const item = data[0];
-        setBaseLocation(parseFloat(item.y), parseFloat(item.x), item.place_name);
-        document.getElementById('manualBaseBox').style.display = 'none';
-        inputField.value = '';
-      } else {
-        alert("'" + query + "' 위치를 찾지 못했습니다.");
-      }
-    });
-  }
-
-  function setBaseLocation(lat, lon, name) {
-    userLat = lat;
-    userLng = lon;
-    currentBaseName = name;
-
-    document.getElementById('locationStatusText').innerText = "📍 기준 위치: " + currentBaseName;
-    if (mainMapObj) {
-      const moveLatLng = new kakao.maps.LatLng(userLat, userLng);
-      mainMapObj.setCenter(moveLatLng);
-      mainMarker.setPosition(moveLatLng);
-    }
-  }
-
-  function handleKeyup(event) {
-    clearTimeout(typingTimer);
-    const query = event.target.value.trim();
-    if (!query) {
-      document.getElementById('suggestions').style.display = 'none';
-      return;
-    }
-    typingTimer = setTimeout(function() { searchKakaoPlaces(query); }, 250);
-  }
-
-  // 💡 [검색 유연성/정확도 개선] 기준 위치명을 조합하여 카카오 검색 품질 향상
-  function searchKakaoPlaces(query) {
-    // 사용자가 명시적으로 지역을 입력하지 않았다면 기준 위치명을 붙임
-    const isBaseIncluded = currentBaseName === "내 위치" || query.includes(currentBaseName);
-    const searchQuery = isBaseIncluded ? query : (currentBaseName + " " + query);
-
-    const searchOptions = {
-      location: new kakao.maps.LatLng(userLat, userLng),
-      radius: 15000 // 15km 범위 내 우선 탐색
-    };
-
-    ps.keywordSearch(searchQuery, function(data, status) {
-      if (status === kakao.maps.services.Status.OK) {
-        renderSuggestions(data);
-      } else {
-        // 조합 검색 결과가 없으면 원래 단어로 재검색 (안전장치)
-        ps.keywordSearch(query, function(fallbackData, fallbackStatus) {
-          if (fallbackStatus === kakao.maps.services.Status.OK) {
-            renderSuggestions(fallbackData);
-          } else {
-            document.getElementById('suggestions').style.display = 'none';
-          }
-        }, searchOptions);
-      }
-    }, searchOptions);
-  }
-
-  function renderSuggestions(places) {
-    const sugBox = document.getElementById('suggestions');
-    sugBox.innerHTML = '';
-
-    places.forEach(function(item) {
-      const distanceMeter = parseInt(item.distance);
-      const distStr = isNaN(distanceMeter) ? '' : (distanceMeter < 1000 ? distanceMeter + "m" : (distanceMeter / 1000).toFixed(1) + "km");
-
-      const div = document.createElement('div');
-      div.className = 'suggestion-item';
-      div.innerHTML = 
-        '<div class="suggestion-header">' +
-          '<span class="place-name">📍 ' + item.place_name + '</span>' +
-          (distStr ? '<span class="place-distance">' + distStr + '</span>' : '') +
-        '</div>' +
-        '<div class="place-addr">' + (item.road_address_name || item.address_name) + '</div>' +
-        '<div class="external-map-btns" onclick="event.stopPropagation()">' +
-          '<a class="ext-btn ext-btn-kakao" href="' + item.place_url + '" target="_blank">🟡 카카오맵 상세</a>' +
-        '</div>';
-
-      div.onclick = function() {
-        document.getElementById('candidateInput').value = item.place_name;
-        selectedPlaceData = {
-          displayName: item.place_name,
-          address: item.road_address_name || item.address_name,
-          lat: parseFloat(item.y),
-          lon: parseFloat(item.x),
-          placeUrl: item.place_url,
-          distStr: distStr
-        };
-        sugBox.style.display = 'none';
-
-        if (mainMapObj) {
-          const moveLatLng = new kakao.maps.LatLng(selectedPlaceData.lat, selectedPlaceData.lon);
-          mainMapObj.setCenter(moveLatLng);
-          mainMarker.setPosition(moveLatLng);
-        }
-      };
-
-      sugBox.appendChild(div);
-    });
-
-    sugBox.style.display = 'block';
-  }
-
-  function addCandidateCombo() {
-    const dateInput = document.getElementById('meetingDate');
-    const dateValue = dateInput.value;
-    if (!dateValue) {
-      alert('날짜를 선택해 주세요.');
-      return;
-    }
-
-    const placeTitle = document.getElementById('candidateInput').value.trim();
-    if (!placeTitle) {
-      alert('장소 이름을 입력해 주세요.');
-      return;
-    }
-
-    const placeInfo = selectedPlaceData ? Object.assign({}, selectedPlaceData) : null;
-
-    candidates.push({
-      id: Date.now(),
-      title: placeTitle,
-      date: dateValue,
-      placeInfo: placeInfo,
-      voters: []
-    });
-
-    document.getElementById('candidateInput').value = '';
-    dateInput.value = '';
-    selectedPlaceData = null;
-    document.getElementById('suggestions').style.display = 'none';
-
-    saveData();
-    render();
-  }
-
-  function openPlaceDetailModal(candidateId) {
-    const candidate = candidates.find(function(c) { return c.id === candidateId; });
-    if (!candidate) return;
-
-    const encTitle = encodeURIComponent(candidate.title);
-    document.getElementById('modalPlaceTitle').innerText = candidate.title;
-
-    let detailContent = '<div>📅 <b>모임 날짜:</b> ' + candidate.date + '</div>';
-
-    if (candidate.placeInfo) {
-      const info = candidate.placeInfo;
-      detailContent += 
-        (info.distStr ? '<div><b>📏 기준 위치 거리:</b> ' + info.distStr + '</div>' : '') +
-        '<div><b>📍 주소:</b> ' + info.address + '</div>';
-
-      setTimeout(function() {
-        const popupContainer = document.getElementById('popupMap');
-        const popLatLng = new kakao.maps.LatLng(info.lat, info.lon);
-
-        if (!popupMapObj) {
-          popupMapObj = new kakao.maps.Map(popupContainer, { center: popLatLng, level: 3 });
-          popupMarker = new kakao.maps.Marker({ position: popLatLng, map: popupMapObj });
-        } else {
-          popupMapObj.setCenter(popLatLng);
-          popupMarker.setPosition(popLatLng);
-        }
-        popupMapObj.relayout();
-        popupMapObj.setCenter(popLatLng);
-      }, 150);
-
-      document.getElementById('popupMap').style.display = 'block';
-    } else {
-      document.getElementById('popupMap').style.display = 'none';
-    }
-
-    const kakaoLink = (candidate.placeInfo && candidate.placeInfo.placeUrl) ? candidate.placeInfo.placeUrl : ('https://map.kakao.com/link/search/' + encTitle);
-
-    detailContent += 
-      '<div style="margin-top: 8px;"><b>🧭 외부 지도로 확인:</b></div>' +
-      '<div class="external-map-btns" style="margin-top: 6px;">' +
-        '<a class="ext-btn ext-btn-kakao" href="' + kakaoLink + '" target="_blank">🟡 카카오맵 바로가기</a>' +
-      '</div>';
-
-    document.getElementById('modalPlaceDetail').innerHTML = detailContent;
-    document.getElementById('placeDetailModal').style.display = 'flex';
-  }
-
-  function closePlaceDetailModal() {
-    document.getElementById('placeDetailModal').style.display = 'none';
-  }
-
-  function deleteCandidate(id) {
-    candidates = candidates.filter(function(item) { return item.id !== id; });
-    saveData();
-    render();
-  }
-
-  function submitVote() {
-    const name = document.getElementById('voterName').value.trim();
-    if (!name) {
-      alert('투표자 이름을 입력해주세요.');
-      return;
-    }
-
-    const selectedCheckboxes = document.querySelectorAll('input[name="poll-item"]:checked');
-    if (selectedCheckboxes.length === 0) {
-      alert('최소 하나의 후보를 선택해 주세요.');
-      return;
-    }
-
-    const selectedIds = Array.from(selectedCheckboxes).map(function(cb) { return Number(cb.value); });
-
-    candidates.forEach(function(item) {
-      item.voters = item.voters.filter(function(voter) { return voter !== name; });
-      if (selectedIds.indexOf(item.id) !== -1) {
-        item.voters.push(name);
-      }
-    });
-
-    saveData();
-    render();
-    alert('투표가 반영되었습니다!');
-  }
-
-  function saveData() {
-    localStorage.setItem('poll_candidates_kakao_v6', JSON.stringify(candidates));
-  }
-
-  function render() {
-    const listContainer = document.getElementById('candidateList');
-    listContainer.innerHTML = '';
-
-    if (candidates.length === 0) {
-      listContainer.innerHTML = '<p style="color:var(--sub-text); font-size:14px; text-align:center; padding:10px 0;">등록된 모임 후보가 없습니다.</p>';
-      return;
-    }
-
-    const maxVotes = Math.max.apply(null, candidates.map(function(c) { return c.voters.length; }));
-
-    candidates.forEach(function(item) {
-      const isTop = maxVotes > 0 && item.voters.length === maxVotes;
-      const encTitle = encodeURIComponent(item.title);
-      const card = document.createElement('div');
-      card.className = 'candidate-item' + (isTop ? ' top-voted' : '');
-
-      const kakaoUrl = (item.placeInfo && item.placeInfo.placeUrl) ? item.placeInfo.placeUrl : ('https://map.kakao.com/link/search/' + encTitle);
-
-      card.innerHTML = 
-        '<div class="item-main-row">' +
-          '<div class="item-left">' +
-            '<input type="checkbox" name="poll-item" value="' + item.id + '" id="item-' + item.id + '">' +
-            '<div>' +
-              '<span class="item-title-clickable" onclick="openPlaceDetailModal(' + item.id + ')">📍 ' + item.title + '</span>' +
-              (isTop ? '<span class="badge" style="margin-left:4px;">1위</span>' : '') +
-              '<div><span class="item-date-badge">📅 ' + item.date + '</span></div>' +
-            '</div>' +
-          '</div>' +
-          '<div style="text-align: right;">' +
-            '<span class="vote-count">' + item.voters.length + '표</span>' +
-            '<div><button class="delete-btn" onclick="deleteCandidate(' + item.id + ')">삭제</button></div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="external-map-btns">' +
-          '<a class="ext-btn ext-btn-kakao" href="' + kakaoUrl + '" target="_blank">🟡 카카오맵 상세페이지</a>' +
-        '</div>' +
-        '<div class="voters-list">' + (item.voters.length > 0 ? '참여: ' + item.voters.join(', ') : '아직 투표 없음') + '</div>';
-
-      listContainer.appendChild(card);
-    });
-  }
-
-  window.addEventListener('load', function() {
-    if (typeof kakao !== 'undefined' && kakao.maps) {
-      initKakaoMaps();
-      render();
-    }
-  });
-
-  window.addEventListener('resize', function() {
-    if (mainMapObj) {
-      mainMapObj.relayout();
-      mainMapObj.setCenter(new kakao.maps.LatLng(userLat, userLng));
-    }
-  });
-</script>
-</body>
-</html>
