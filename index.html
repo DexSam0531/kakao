@@ -355,3 +355,299 @@
   }
 
   function toggleManualBaseInput() {
+    const box = document.getElementById('manualBaseBox');
+    box.style.display = box.style.display === 'flex' ? 'none' : 'flex';
+  }
+
+  function submitCustomBaseLocation() {
+    const inputField = document.getElementById('manualBaseInput');
+    const query = inputField.value.trim();
+    if (!query) {
+      alert('지역명이나 역명을 입력해 주세요.');
+      return;
+    }
+
+    ps.keywordSearch(query, function(data, status) {
+      if (status === kakao.maps.services.Status.OK && data.length > 0) {
+        const item = data[0];
+        setBaseLocation(parseFloat(item.y), parseFloat(item.x), item.place_name);
+        document.getElementById('manualBaseBox').style.display = 'none';
+        inputField.value = '';
+      } else {
+        alert("'" + query + "' 위치를 찾지 못했습니다.");
+      }
+    });
+  }
+
+  function setBaseLocation(lat, lon, name) {
+    userLat = lat;
+    userLng = lon;
+    currentBaseName = name;
+
+    document.getElementById('locationStatusText').innerText = "📍 기준 위치: " + currentBaseName;
+    if (mainMapObj) {
+      const moveLatLng = new kakao.maps.LatLng(userLat, userLng);
+      mainMapObj.setCenter(moveLatLng);
+      mainMarker.setPosition(moveLatLng);
+    }
+  }
+
+  function handleKeyup(event) {
+    clearTimeout(typingTimer);
+    const query = event.target.value.trim();
+    if (!query) {
+      document.getElementById('suggestions').style.display = 'none';
+      return;
+    }
+    typingTimer = setTimeout(function() { searchKakaoPlaces(query); }, 250);
+  }
+
+  function searchKakaoPlaces(query) {
+    const isBaseIncluded = currentBaseName === "내 위치" || query.includes(currentBaseName);
+    const searchQuery = isBaseIncluded ? query : (currentBaseName + " " + query);
+
+    const searchOptions = {
+      location: new kakao.maps.LatLng(userLat, userLng),
+      radius: 15000
+    };
+
+    ps.keywordSearch(searchQuery, function(data, status) {
+      if (status === kakao.maps.services.Status.OK) {
+        renderSuggestions(data);
+      } else {
+        ps.keywordSearch(query, function(fallbackData, fallbackStatus) {
+          if (fallbackStatus === kakao.maps.services.Status.OK) {
+            renderSuggestions(fallbackData);
+          } else {
+            document.getElementById('suggestions').style.display = 'none';
+          }
+        }, searchOptions);
+      }
+    }, searchOptions);
+  }
+
+  function renderSuggestions(places) {
+    const sugBox = document.getElementById('suggestions');
+    sugBox.innerHTML = '';
+
+    places.forEach(function(item) {
+      const distanceMeter = parseInt(item.distance);
+      const distStr = isNaN(distanceMeter) ? '' : (distanceMeter < 1000 ? distanceMeter + "m" : (distanceMeter / 1000).toFixed(1) + "km");
+
+      const div = document.createElement('div');
+      div.className = 'suggestion-item';
+      div.innerHTML = 
+        '<div class="suggestion-header">' +
+          '<span class="place-name">📍 ' + item.place_name + '</span>' +
+          (distStr ? '<span class="place-distance">' + distStr + '</span>' : '') +
+        '</div>' +
+        '<div class="place-addr">' + (item.road_address_name || item.address_name) + '</div>' +
+        '<div class="external-map-btns" onclick="event.stopPropagation()">' +
+          '<a class="ext-btn ext-btn-kakao" href="' + item.place_url + '" target="_blank">🟡 카카오맵 상세</a>' +
+        '</div>';
+
+      div.onclick = function() {
+        document.getElementById('candidateInput').value = item.place_name;
+        selectedPlaceData = {
+          displayName: item.place_name,
+          address: item.road_address_name || item.address_name,
+          lat: parseFloat(item.y),
+          lon: parseFloat(item.x),
+          placeUrl: item.place_url,
+          distStr: distStr
+        };
+        sugBox.style.display = 'none';
+
+        if (mainMapObj) {
+          const moveLatLng = new kakao.maps.LatLng(selectedPlaceData.lat, selectedPlaceData.lon);
+          mainMapObj.setCenter(moveLatLng);
+          mainMarker.setPosition(moveLatLng);
+        }
+      };
+
+      sugBox.appendChild(div);
+    });
+
+    sugBox.style.display = 'block';
+  }
+
+  function addCandidateCombo() {
+    const dateInput = document.getElementById('meetingDate');
+    const dateValue = dateInput.value;
+    if (!dateValue) {
+      alert('날짜를 선택해 주세요.');
+      return;
+    }
+
+    const placeTitle = document.getElementById('candidateInput').value.trim();
+    if (!placeTitle) {
+      alert('장소 이름을 입력해 주세요.');
+      return;
+    }
+
+    const placeInfo = selectedPlaceData ? Object.assign({}, selectedPlaceData) : null;
+
+    candidates.push({
+      id: Date.now(),
+      title: placeTitle,
+      date: dateValue,
+      placeInfo: placeInfo,
+      voters: []
+    });
+
+    document.getElementById('candidateInput').value = '';
+    dateInput.value = '';
+    selectedPlaceData = null;
+    document.getElementById('suggestions').style.display = 'none';
+
+    saveData();
+    render();
+  }
+
+  function openPlaceDetailModal(candidateId) {
+    const candidate = candidates.find(function(c) { return c.id === candidateId; });
+    if (!candidate) return;
+
+    const encTitle = encodeURIComponent(candidate.title);
+    document.getElementById('modalPlaceTitle').innerText = candidate.title;
+
+    let detailContent = '<div>📅 <b>모임 날짜:</b> ' + candidate.date + '</div>';
+
+    if (candidate.placeInfo) {
+      const info = candidate.placeInfo;
+      detailContent += 
+        (info.distStr ? '<div><b>📏 기준 위치 거리:</b> ' + info.distStr + '</div>' : '') +
+        '<div><b>📍 주소:</b> ' + info.address + '</div>';
+
+      setTimeout(function() {
+        const popupContainer = document.getElementById('popupMap');
+        const popLatLng = new kakao.maps.LatLng(info.lat, info.lon);
+
+        if (!popupMapObj) {
+          popupMapObj = new kakao.maps.Map(popupContainer, { center: popLatLng, level: 3 });
+          popupMarker = new kakao.maps.Marker({ position: popLatLng, map: popupMapObj });
+        } else {
+          popupMapObj.setCenter(popLatLng);
+          popupMarker.setPosition(popLatLng);
+        }
+        popupMapObj.relayout();
+        popupMapObj.setCenter(popLatLng);
+      }, 150);
+
+      document.getElementById('popupMap').style.display = 'block';
+    } else {
+      document.getElementById('popupMap').style.display = 'none';
+    }
+
+    const kakaoLink = (candidate.placeInfo && candidate.placeInfo.placeUrl) ? candidate.placeInfo.placeUrl : ('https://map.kakao.com/link/search/' + encTitle);
+
+    detailContent += 
+      '<div style="margin-top: 8px;"><b>🧭 외부 지도로 확인:</b></div>' +
+      '<div class="external-map-btns" style="margin-top: 6px;">' +
+        '<a class="ext-btn ext-btn-kakao" href="' + kakaoLink + '" target="_blank">🟡 카카오맵 바로가기</a>' +
+      '</div>';
+
+    document.getElementById('modalPlaceDetail').innerHTML = detailContent;
+    document.getElementById('placeDetailModal').style.display = 'flex';
+  }
+
+  function closePlaceDetailModal() {
+    document.getElementById('placeDetailModal').style.display = 'none';
+  }
+
+  function deleteCandidate(id) {
+    candidates = candidates.filter(function(item) { return item.id !== id; });
+    saveData();
+    render();
+  }
+
+  function submitVote() {
+    const name = document.getElementById('voterName').value.trim();
+    if (!name) {
+      alert('투표자 이름을 입력해주세요.');
+      return;
+    }
+
+    const selectedCheckboxes = document.querySelectorAll('input[name="poll-item"]:checked');
+    if (selectedCheckboxes.length === 0) {
+      alert('최소 하나의 후보를 선택해 주세요.');
+      return;
+    }
+
+    const selectedIds = Array.from(selectedCheckboxes).map(function(cb) { return Number(cb.value); });
+
+    candidates.forEach(function(item) {
+      item.voters = item.voters.filter(function(voter) { return voter !== name; });
+      if (selectedIds.indexOf(item.id) !== -1) {
+        item.voters.push(name);
+      }
+    });
+
+    saveData();
+    render();
+    alert('투표가 반영되었습니다!');
+  }
+
+  function saveData() {
+    localStorage.setItem('poll_candidates_kakao_v7', JSON.stringify(candidates));
+  }
+
+  function render() {
+    const listContainer = document.getElementById('candidateList');
+    listContainer.innerHTML = '';
+
+    if (candidates.length === 0) {
+      listContainer.innerHTML = '<p style="color:var(--sub-text); font-size:14px; text-align:center; padding:10px 0;">등록된 모임 후보가 없습니다.</p>';
+      return;
+    }
+
+    const maxVotes = Math.max.apply(null, candidates.map(function(c) { return c.voters.length; }));
+
+    candidates.forEach(function(item) {
+      const isTop = maxVotes > 0 && item.voters.length === maxVotes;
+      const encTitle = encodeURIComponent(item.title);
+      const card = document.createElement('div');
+      card.className = 'candidate-item' + (isTop ? ' top-voted' : '');
+
+      const kakaoUrl = (item.placeInfo && item.placeInfo.placeUrl) ? item.placeInfo.placeUrl : ('https://map.kakao.com/link/search/' + encTitle);
+
+      card.innerHTML = 
+        '<div class="item-main-row">' +
+          '<div class="item-left">' +
+            '<input type="checkbox" name="poll-item" value="' + item.id + '" id="item-' + item.id + '">' +
+            '<div>' +
+              '<span class="item-title-clickable" onclick="openPlaceDetailModal(' + item.id + ')">📍 ' + item.title + '</span>' +
+              (isTop ? '<span class="badge" style="margin-left:4px;">1위</span>' : '') +
+              '<div><span class="item-date-badge">📅 ' + item.date + '</span></div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="text-align: right;">' +
+            '<span class="vote-count">' + item.voters.length + '표</span>' +
+            '<div><button class="delete-btn" onclick="deleteCandidate(' + item.id + ')">삭제</button></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="external-map-btns">' +
+          '<a class="ext-btn ext-btn-kakao" href="' + kakaoUrl + '" target="_blank">🟡 카카오맵 상세페이지</a>' +
+        '</div>' +
+        '<div class="voters-list">' + (item.voters.length > 0 ? '참여: ' + item.voters.join(', ') : '아직 투표 없음') + '</div>';
+
+      listContainer.appendChild(card);
+    });
+  }
+
+  window.addEventListener('load', function() {
+    if (typeof kakao !== 'undefined' && kakao.maps) {
+      initKakaoMaps();
+      render();
+    }
+  });
+
+  window.addEventListener('resize', function() {
+    if (mainMapObj) {
+      mainMapObj.relayout();
+      mainMapObj.setCenter(new kakao.maps.LatLng(userLat, userLng));
+    }
+  });
+</script>
+</body>
+</html>
