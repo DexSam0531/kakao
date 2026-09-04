@@ -64,7 +64,7 @@
       border: 1px solid var(--border-color); position: relative; overflow: hidden;
     }
 
-    /* 🏷️ 추천 태그 & 버튼 스타일 (선택 활성화 UI 추가) */
+    /* 🏷️ 추천 태그 & 버튼 스타일 */
     .recommend-section { margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
     .tag-group { display: flex; gap: 6px; flex-wrap: wrap; }
     .tag-btn {
@@ -73,7 +73,6 @@
     }
     .tag-btn:hover { background: var(--primary-light); color: var(--primary-color); border-color: var(--primary-color); }
     
-    /* ✨ 선택(활성화)된 태그 스타일 */
     .tag-btn.active {
       background: var(--primary-color) !important;
       color: #ffffff !important;
@@ -81,12 +80,16 @@
       box-shadow: 0 2px 6px rgba(49, 130, 246, 0.3);
     }
 
-    /* 🤖 AI 추천 박스 스타일 */
+    /* 🤖 AI 스마트 추천 박스 스타일 */
     .ai-box {
       background: var(--ai-purple-light); border: 1px solid #d8b4fe; border-radius: 12px; padding: 12px; margin-bottom: 12px;
     }
     .ai-title { font-weight: 700; font-size: 13px; color: var(--ai-purple); margin-bottom: 8px; display: flex; align-items: center; gap: 4px; }
     .ai-row { display: flex; gap: 6px; }
+    .ai-input {
+      flex: 1; padding: 8px 10px; font-size: 12px; border: 1px solid #d8b4fe; border-radius: 8px; outline: none;
+    }
+    .ai-input:focus { border-color: var(--ai-purple); }
     .ai-btn { background: var(--ai-purple); color: white; border: none; padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: 12px; cursor: pointer; white-space: nowrap; }
     .ai-result { margin-top: 8px; font-size: 12px; color: #4c1d95; line-height: 1.4; display: none; }
 
@@ -176,24 +179,18 @@
     <!-- 카카오 메인 지도 -->
     <div id="mainMap"></div>
 
-    <!-- 🤖 AI 스마트 추천 섹션 -->
+    <!-- 🤖 AI 스마트 추천 섹션 (자유 입력 방식) -->
     <div class="ai-box">
-      <div class="ai-title">✨ AI 스마트 모임 추천기</div>
+      <div class="ai-title">✨ AI 맞춤 장소 추천</div>
       <div class="ai-row">
-        <select id="aiTypeSelect" style="font-size: 12px; padding: 6px 8px;">
-          <option value="회식">단체 회식하기 좋은 곳</option>
-          <option value="대화">조용히 대화 나누기 좋은 카페</option>
-          <option value="놀거리">친구들과 즐길 액티비티/놀거리</option>
-          <option value="분위기">분위기 좋은 데이트/파인다이닝</option>
-        </select>
-        <button class="ai-btn" onclick="runAiRecommendation()">AI 분석 추천</button>
+        <input type="text" id="aiCustomInput" class="ai-input" placeholder="원하는 조건 입력 (예: 분위기 좋은 디저트, 주차 편한 고기집)" onkeyup="if(event.key === 'Enter') runAiRecommendation()">
+        <button class="ai-btn" onclick="runAiRecommendation()">AI 추천</button>
       </div>
       <div id="aiResultBox" class="ai-result"></div>
     </div>
 
-    <!-- 🏷️ 추천 태그 모음 (특정 기업명 제거 및 일반화) -->
+    <!-- 🏷️ 추천 태그 모음 -->
     <div class="recommend-section">
-      <!-- 1. 카테고리 추천 -->
       <div>
         <label style="font-size: 12px; font-weight: 600; color: var(--sub-text);">📌 빠른 카테고리 추천</label>
         <div class="tag-group" style="margin-top: 4px;">
@@ -204,7 +201,6 @@
         </div>
       </div>
 
-      <!-- 2. 상황/주제별 테마 추천 -->
       <div>
         <label style="font-size: 12px; font-weight: 600; color: var(--sub-text);">💡 상황별 테마 추천</label>
         <div class="tag-group" style="margin-top: 4px;">
@@ -214,7 +210,6 @@
         </div>
       </div>
 
-      <!-- 3. 주요 장소 유형 (특정 브랜드 제거 후 중립적 명칭 변경) -->
       <div>
         <label style="font-size: 12px; font-weight: 600; color: var(--sub-text);">🏢 주요 모임 장소</label>
         <div class="tag-group" style="margin-top: 4px;">
@@ -304,41 +299,27 @@
     }, 500);
   }
 
-  /* 🤖 AI 스마트 추천 처리 함수 */
+  /* 🤖 AI 사용자 자유 텍스트 추천 처리 함수 */
   function runAiRecommendation() {
-    const type = document.getElementById('aiTypeSelect').value;
+    const userInput = document.getElementById('aiCustomInput').value.trim();
     const resultBox = document.getElementById('aiResultBox');
 
-    let keyword = "";
-    let reason = "";
-
-    if (type === "회식") {
-      keyword = "삼겹살 고기집";
-      reason = `💡 <b>AI 추천 이유:</b> [${currentBaseName}] 인근 단체 좌석 수용이 용이하고 호불호 없는 메뉴입니다.`;
-    } else if (type === "대화") {
-      keyword = "대형 디저트 카페";
-      reason = `💡 <b>AI 추천 이유:</b> [${currentBaseName}] 인근 좌석 간격이 넓고 조용한 분위기의 카페입니다.`;
-    } else if (type === "놀거리") {
-      keyword = "보드게임카페 볼링장";
-      reason = `💡 <b>AI 추천 이유:</b> [${currentBaseName}] 근처에서 다 함께 즐길 수 있는 체험형 장소입니다.`;
-    } else if (type === "분위기") {
-      keyword = "이탈리안 레스토랑";
-      reason = `💡 <b>AI 추천 이유:</b> [${currentBaseName}] 주변 조명과 분위기가 좋아 모임에 적합합니다.`;
+    if (!userInput) {
+      alert('AI에게 추천받고 싶은 조건을 입력해 주세요! (예: 인근 브런치 카페)');
+      return;
     }
 
-    resultBox.innerHTML = reason;
+    resultBox.innerHTML = `💡 <b>AI 추천 분석:</b> [${currentBaseName}] 근처에서 '<b>${userInput}</b>' 조건에 맞는 추천 장소를 검색합니다.`;
     resultBox.style.display = 'block';
 
-    quickSearch(keyword, null);
+    quickSearch(userInput, null);
   }
 
   /* 🏷️ 태그 버튼 클릭 시 자동 검색 & 활성화(체크) 표시 UI 연동 */
   function quickSearch(keyword, btnElement) {
-    // 모든 태그 버튼의 active 클래스 제거
     const allTags = document.querySelectorAll('.tag-btn');
     allTags.forEach(tag => tag.classList.remove('active'));
 
-    // 클릭한 버튼이 있을 경우 활성화 표시
     if (btnElement) {
       btnElement.classList.add('active');
     }
@@ -420,7 +401,6 @@
   }
 
   function handleKeyup(event) {
-    // 키보드로 직접 입력 시작하면 태그 선택 해제
     const allTags = document.querySelectorAll('.tag-btn');
     allTags.forEach(tag => tag.classList.remove('active'));
 
@@ -531,7 +511,6 @@
     selectedPlaceData = null;
     document.getElementById('suggestions').style.display = 'none';
 
-    // 등록 후 모든 태그 선택 해제
     document.querySelectorAll('.tag-btn').forEach(tag => tag.classList.remove('active'));
 
     saveData();
