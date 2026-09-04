@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>스마트 모임 장소 & 날짜 투표</title>
 
+  <!-- 🔑 카카오 API 스크립트 -->
   <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a6c2fc47cb08f9a3cc41d343944ebdc0&libraries=services"></script>
 
   <style>
@@ -63,7 +64,7 @@
       border: 1px solid var(--border-color); position: relative; overflow: hidden;
     }
 
-    /* 🏷️ 추천 태그 & 버튼 스타일 */
+    /* 🏷️ 추천 태그 & 버튼 스타일 (선택 활성화 UI 추가) */
     .recommend-section { margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
     .tag-group { display: flex; gap: 6px; flex-wrap: wrap; }
     .tag-btn {
@@ -71,6 +72,14 @@
       padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;
     }
     .tag-btn:hover { background: var(--primary-light); color: var(--primary-color); border-color: var(--primary-color); }
+    
+    /* ✨ 선택(활성화)된 태그 스타일 */
+    .tag-btn.active {
+      background: var(--primary-color) !important;
+      color: #ffffff !important;
+      border-color: var(--primary-color) !important;
+      box-shadow: 0 2px 6px rgba(49, 130, 246, 0.3);
+    }
 
     /* 🤖 AI 추천 박스 스타일 */
     .ai-box {
@@ -164,8 +173,10 @@
       </div>
     </div>
 
+    <!-- 카카오 메인 지도 -->
     <div id="mainMap"></div>
 
+    <!-- 🤖 AI 스마트 추천 섹션 -->
     <div class="ai-box">
       <div class="ai-title">✨ AI 스마트 모임 추천기</div>
       <div class="ai-row">
@@ -180,36 +191,41 @@
       <div id="aiResultBox" class="ai-result"></div>
     </div>
 
+    <!-- 🏷️ 추천 태그 모음 (특정 기업명 제거 및 일반화) -->
     <div class="recommend-section">
+      <!-- 1. 카테고리 추천 -->
       <div>
         <label style="font-size: 12px; font-weight: 600; color: var(--sub-text);">📌 빠른 카테고리 추천</label>
         <div class="tag-group" style="margin-top: 4px;">
-          <button class="tag-btn" onclick="quickSearch('카페')">☕ 카페</button>
-          <button class="tag-btn" onclick="quickSearch('맛집')">🍽️ 맛집</button>
-          <button class="tag-btn" onclick="quickSearch('술집')">🍺 술집/호프</button>
-          <button class="tag-btn" onclick="quickSearch('스터디카페')">📖 스터디룸</button>
+          <button class="tag-btn" onclick="quickSearch('카페', this)">☕ 카페</button>
+          <button class="tag-btn" onclick="quickSearch('맛집', this)">🍽️ 맛집</button>
+          <button class="tag-btn" onclick="quickSearch('술집', this)">🍺 술집/호프</button>
+          <button class="tag-btn" onclick="quickSearch('스터디카페', this)">📖 스터디룸</button>
         </div>
       </div>
 
+      <!-- 2. 상황/주제별 테마 추천 -->
       <div>
         <label style="font-size: 12px; font-weight: 600; color: var(--sub-text);">💡 상황별 테마 추천</label>
         <div class="tag-group" style="margin-top: 4px;">
-          <button class="tag-btn" onclick="quickSearch('주차장 넓은 맛집')">🚗 주차 용이</button>
-          <button class="tag-btn" onclick="quickSearch('룸식당')">🚪 프라이빗 룸</button>
-          <button class="tag-btn" onclick="quickSearch('보드게임카페')">🎲 놀거리/게임</button>
+          <button class="tag-btn" onclick="quickSearch('주차장 넓은 맛집', this)">🚗 주차 용이</button>
+          <button class="tag-btn" onclick="quickSearch('룸식당', this)">🚪 프라이빗 룸</button>
+          <button class="tag-btn" onclick="quickSearch('보드게임카페', this)">🎲 놀거리/게임</button>
         </div>
       </div>
 
+      <!-- 3. 주요 장소 유형 (특정 브랜드 제거 후 중립적 명칭 변경) -->
       <div>
-        <label style="font-size: 12px; font-weight: 600; color: var(--sub-text);">🔥 인기 핫플 바로검색</label>
+        <label style="font-size: 12px; font-weight: 600; color: var(--sub-text);">🏢 주요 모임 장소</label>
         <div class="tag-group" style="margin-top: 4px;">
-          <button class="tag-btn" style="background:#fff0f0; color:#d93838; border-color:#ffcdd2;" onclick="quickSearch('현대백화점')">🏢 백화점/쇼핑몰</button>
-          <button class="tag-btn" style="background:#fff0f0; color:#d93838; border-color:#ffcdd2;" onclick="quickSearch('CGV')">🎬 영화관</button>
-          <button class="tag-btn" style="background:#fff0f0; color:#d93838; border-color:#ffcdd2;" onclick="quickSearch('스타벅스')">⭐ 대표 만남장소</button>
+          <button class="tag-btn" onclick="quickSearch('백화점', this)">🛍️ 백화점</button>
+          <button class="tag-btn" onclick="quickSearch('영화관', this)">🎬 영화관</button>
+          <button class="tag-btn" onclick="quickSearch('대형카페', this)">☕ 대형카페</button>
         </div>
       </div>
     </div>
 
+    <!-- 장소 검색 영역 -->
     <div class="form-group">
       <label style="font-size: 13px; font-weight: 600;">장소, 주소 검색</label>
       <div class="search-box">
@@ -218,6 +234,7 @@
       </div>
     </div>
 
+    <!-- 날짜 입력 및 추가 버튼 -->
     <div class="form-group">
       <label style="font-size: 13px; font-weight: 600;">희망 날짜 선택</label>
       <input type="date" id="meetingDate">
@@ -238,6 +255,7 @@
   </div>
 </div>
 
+<!-- 상세 지도 팝업 -->
 <div class="modal-overlay" id="placeDetailModal">
   <div class="modal-content">
     <h2 id="modalPlaceTitle" style="font-size: 18px; color: var(--text-color);">장소 정보</h2>
@@ -311,11 +329,20 @@
     resultBox.innerHTML = reason;
     resultBox.style.display = 'block';
 
-    quickSearch(keyword);
+    quickSearch(keyword, null);
   }
 
-  /* 🏷️ 태그 버튼 클릭 시 자동 검색 연동 */
-  function quickSearch(keyword) {
+  /* 🏷️ 태그 버튼 클릭 시 자동 검색 & 활성화(체크) 표시 UI 연동 */
+  function quickSearch(keyword, btnElement) {
+    // 모든 태그 버튼의 active 클래스 제거
+    const allTags = document.querySelectorAll('.tag-btn');
+    allTags.forEach(tag => tag.classList.remove('active'));
+
+    // 클릭한 버튼이 있을 경우 활성화 표시
+    if (btnElement) {
+      btnElement.classList.add('active');
+    }
+
     const input = document.getElementById('candidateInput');
     input.value = keyword;
     searchKakaoPlaces(keyword);
@@ -393,6 +420,10 @@
   }
 
   function handleKeyup(event) {
+    // 키보드로 직접 입력 시작하면 태그 선택 해제
+    const allTags = document.querySelectorAll('.tag-btn');
+    allTags.forEach(tag => tag.classList.remove('active'));
+
     clearTimeout(typingTimer);
     const query = event.target.value.trim();
     if (!query) {
@@ -499,6 +530,9 @@
     dateInput.value = '';
     selectedPlaceData = null;
     document.getElementById('suggestions').style.display = 'none';
+
+    // 등록 후 모든 태그 선택 해제
+    document.querySelectorAll('.tag-btn').forEach(tag => tag.classList.remove('active'));
 
     saveData();
     render();
