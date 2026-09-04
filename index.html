@@ -179,7 +179,7 @@
     <!-- 카카오 메인 지도 -->
     <div id="mainMap"></div>
 
-    <!-- 🤖 AI 스마트 추천 섹션 (자유 입력 방식) -->
+    <!-- 🤖 AI 스마트 추천 섹션 -->
     <div class="ai-box">
       <div class="ai-title">✨ AI 맞춤 장소 추천</div>
       <div class="ai-row">
@@ -299,23 +299,37 @@
     }, 500);
   }
 
-  /* 🤖 AI 사용자 자유 텍스트 추천 처리 함수 */
+  /* 🧠 자연어 문장에서 지도 검색용 핵심 키워드만 추출해주는 함수 */
+  function extractSearchKeywords(text) {
+    // 불필요한 조사, 형용사, 수식어 제거 단어장
+    const stopWords = ['분위기', '좋은', '추천', '근처', '주변', '많은', '편한', '맛있는', '조용한', '넓은', '곳', '해줘', '알려줘', '찾아줘', '좀', '가기', '에서', '으로'];
+    
+    let words = text.split(/\s+/);
+    let filtered = words.filter(word => !stopWords.includes(word));
+
+    // 정제 후 남은 단어가 없으면 원본 그대로 반환
+    return filtered.length > 0 ? filtered.join(' ') : text;
+  }
+
+  /* 🤖 AI 사용자 입력 처리 함수 */
   function runAiRecommendation() {
     const userInput = document.getElementById('aiCustomInput').value.trim();
     const resultBox = document.getElementById('aiResultBox');
 
     if (!userInput) {
-      alert('AI에게 추천받고 싶은 조건을 입력해 주세요! (예: 인근 브런치 카페)');
+      alert('AI에게 추천받고 싶은 조건을 입력해 주세요! (예: 분위기 좋은 디저트)');
       return;
     }
 
-    resultBox.innerHTML = `💡 <b>AI 추천 분석:</b> [${currentBaseName}] 근처에서 '<b>${userInput}</b>' 조건에 맞는 추천 장소를 검색합니다.`;
+    // 자연어 정제 로직 실행
+    const searchKeyword = extractSearchKeywords(userInput);
+
+    resultBox.innerHTML = `💡 <b>AI 검색 정제:</b> 입력하신 문장에서 <b>[${searchKeyword}]</b> 키워드로 검색을 실행합니다.`;
     resultBox.style.display = 'block';
 
-    quickSearch(userInput, null);
+    quickSearch(searchKeyword, null);
   }
 
-  /* 🏷️ 태그 버튼 클릭 시 자동 검색 & 활성화(체크) 표시 UI 연동 */
   function quickSearch(keyword, btnElement) {
     const allTags = document.querySelectorAll('.tag-btn');
     allTags.forEach(tag => tag.classList.remove('active'));
@@ -636,7 +650,7 @@
           '</div>' +
           '<div style="text-align: right;">' +
             '<span class="vote-count">' + item.voters.length + '표</span>' +
-            '<div><button class="delete-btn" onclick="deleteCandidate(' + item.id + ')">삭제</button></div>' +
+            '<div><button class="delete-btn" onclick="deleteCandidate(id)">삭제</button></div>' +
           '</div>' +
         '</div>' +
         '<div class="external-map-btns">' +
